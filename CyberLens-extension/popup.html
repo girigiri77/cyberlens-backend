@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>CyberLens</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Orbitron:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="popup.css">
+
+</head>
+
+<body>
+
+<!-- Background glow -->
+<div class="bg-glow"></div>
+
+<!-- moving scanline -->
+<div class="scanline"></div>
+
+<div class="container">
+
+<!-- =======================
+     HEADER
+======================= -->
+
+<div class="logo-section">
+
+<h2 class="title">🛡 CYBERLENS</h2>
+
+<p class="subtitle">Your Smart Web Guardian</p>
+
+<p class="choose">Select operational mode</p>
+
+</div>
+
+
+<!-- =======================
+     CYBER RADAR SCANNER
+======================= -->
+
+<div class="radar-wrapper">
+
+<div class="radar">
+
+<div class="radar-circle"></div>
+<div class="radar-circle"></div>
+<div class="radar-circle"></div>
+
+<div class="radar-sweep"></div>
+
+</div>
+
+<div class="radar-label">
+Network Threat Monitor
+</div>
+
+</div>
+
+
+<!-- =======================
+     MODE SELECTION
+======================= -->
+
+<div class="modes">
+
+<!-- SECURITY MODE -->
+
+<div class="mode-card tech" id="techBtn">
+
+<div class="mode-header">
+<span class="mode-icon">🛡</span>
+<h3>SECURITY MODE </h3>
+</div>
+
+<p class="mode-desc">
+Analyze website security layers
+</p>
+
+<div class="features">
+
+<span>Threat Scanner</span>
+<span>Domain Intelligence</span>
+<span>Security Stack Scan</span>
+
+</div>
+
+</div>
+
+
+<!-- SMART SHOPPING -->
+
+<div class="mode-card nontech" id="nonTechBtn">
+
+<div class="mode-header">
+<span class="mode-icon">🛒</span>
+<h3>Smart Shopping</h3>
+</div>
+
+<p class="mode-desc">
+Detect deals & safe stores
+</p>
+
+<div class="features">
+
+<span>Price Comparison</span>
+<span>Coupon Finder</span>
+<span>Trusted Store Check</span>
+
+</div>
+
+</div>
+
+</div>
+
+
+<!-- =======================
+     LIVE TERMINAL
+======================= -->
+
+<div class="terminal">
+
+<div class="terminal-header">
+CyberLens Threat Console
+</div>
+
+<div class="terminal-body" id="threatConsole">
+
+<div class="terminal-line">> Initializing CyberLens Engine...</div>
+<div class="terminal-line">> Loading Threat Intelligence...</div>
+<div class="terminal-line">> Monitoring current website...</div>
+<div class="terminal-line">> System Ready<span class="cursor">_</span></div>
+
+</div>
+
+</div>
+
+
+<!-- =======================
+     SYSTEM STATUS
+======================= -->
+
+<div class="footer">
+
+<span class="status-dot"></span>
+
+CyberLens Protection Active
+
+</div>
+
+</div>
+
+<script src="popup.js"></script>
+
+</body>
+
+</html>

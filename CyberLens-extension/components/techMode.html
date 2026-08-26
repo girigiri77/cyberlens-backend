@@ -1,0 +1,134 @@
+<div id="techMode">
+
+  <h3>🔐 𝗧𝗘𝗖𝗛 𝗠𝗢𝗗𝗘</h3>
+
+  <!-- ======================
+       WEBSITE INTELLIGENCE
+  ====================== -->
+
+  <div class="card">
+
+    <h4>🌐 Website Intelligence</h4>
+
+    <p><b>Domain:</b> <span id="domain">Loading…</span></p>
+
+    <p><b>IP Address:</b> <span id="ip">Fetching…</span></p>
+
+    <p><b>Protocol:</b> <span id="protocol">Checking…</span></p>
+
+    <p><b>Website Age:</b> <span id="buildDate">Unknown</span></p>
+
+  </div>
+
+
+  <!-- ======================
+       TLS CERTIFICATE
+  ====================== -->
+
+  <div class="card">
+
+    <h4>🔐 TLS Certificate</h4>
+
+    <p><b>Issuer:</b> <span id="issuer">Checking…</span></p>
+
+    <p><b>Valid From:</b> <span id="validFrom">Checking…</span></p>
+
+    <p><b>Expiry:</b> <span id="validTo">Checking…</span></p>
+
+    <p>
+      <b>Status:</b>
+      <span class="badge" id="tlsStatus">Checking…</span>
+    </p>
+
+  </div>
+
+
+  <!-- ======================
+       SECURITY SCAN
+  ====================== -->
+
+  <div class="card">
+
+    <h4>🛡 Security Scan</h4>
+
+    <!-- SCAN PROGRESS BAR -->
+
+    <div class="scan-bar">
+      <div class="scan-progress" id="scanProgress"></div>
+    </div>
+
+    <ul class="security-stack" id="securityStack">
+
+      <li>
+        🔒 HTTPS Enabled
+        <span class="status">Checking…</span>
+      </li>
+
+      <li>
+        🧬 TLS Secure
+        <span class="status">Checking…</span>
+      </li>
+
+      <li>
+        📑 Security Headers
+        <span class="status">Checking…</span>
+      </li>
+
+      <li>
+        🍪 Cookie Protection
+        <span class="status">Checking…</span>
+      </li>
+
+      <li>
+        🌐 Domain Intelligence
+        <span class="status">Checking…</span>
+      </li>
+
+      <li>
+        🎣 Phishing Detection
+        <span class="status">Checking…</span>
+      </li>
+
+    </ul>
+
+  </div>
+
+
+  <!-- ======================
+       SECURITY SCORE
+  ====================== -->
+
+  <div class="card secure">
+
+    <h4>📊 Estimated Security Score</h4>
+
+    <p>
+
+      <b id="securityScore">Calculating…</b>
+
+    </p>
+
+  </div>
+
+
+  <!-- ======================
+       USER FEEDBACK
+  ====================== -->
+
+  <div class="card">
+
+    <h4>💬 Security Feedback</h4>
+
+    <div class="feedback">
+
+      <button class="safe">👍 Safe</button>
+
+      <button class="warn">⚠ Suspicious</button>
+
+      <button class="danger">🚨 Phishing</button>
+
+    </div>
+
+  </div>
+
+</div>
