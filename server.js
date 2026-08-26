@@ -13,15 +13,25 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const SERP_API_KEY = process.env.SERP_API_KEY || "";
+
 /* =====================================================
    ===================== SCAN API ======================
 ===================================================== */
 
 app.get("/scan", async (req, res) => {
 
-  const domain = req.query.domain;
+  const domain = String(req.query.domain || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "");
 
-  if (!domain) {
+  const isValidDomain = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain);
+
+  if (!isValidDomain) {
     return res.status(400).json({ error: "No domain provided" });
   }
 
@@ -89,6 +99,10 @@ app.get("/scan", async (req, res) => {
       );
 
       request.on("error", () => resolve());
+      request.on("timeout", () => {
+        request.destroy();
+        resolve();
+      });
       request.end();
 
     });
@@ -126,6 +140,11 @@ app.get("/scan", async (req, res) => {
         }
       );
 
+      socket.setTimeout(5000);
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve();
+      });
       socket.on("error", () => resolve());
 
     });
@@ -243,14 +262,18 @@ app.get("/compare", async (req, res) => {
    ===== NON-TECH MODE (SERP API PRICE COMPARISON) =====
 ===================================================== */
 
-const SERP_API_KEY = "be2139e864d14d12db4b0382bd8476ada970e000c4e67f5853413703e5494a5f";
-
 app.get("/nontech-compare", async (req, res) => {
 
   const product = req.query.product;
 
   if (!product) {
     return res.json({ error: "Product required" });
+  }
+
+  if (!SERP_API_KEY) {
+    return res.status(500).json({
+      error: "SERP API key not configured"
+    });
   }
 
   try {
@@ -317,7 +340,16 @@ app.get("/", (req, res) => {
   res.send("CyberLens Backend Running");
 });
 
-const PORT = 3000;
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+app.use((err, req, res, next) => {
+  console.error("Unhandled server error:", err.message);
+  res.status(500).json({ error: "Internal server error" });
+});
+
+const PORT = Number(process.env.PORT) || 3000;
 
 app.listen(PORT, () => {
   console.log(`CyberLens backend running on http://localhost:${PORT}`);
