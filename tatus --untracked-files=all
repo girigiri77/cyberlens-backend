@@ -1,0 +1,197 @@
+[1mdiff --git a/CyberLens-extension/components/nonTechMode.html b/CyberLens-extension/components/nonTechMode.html[m
+[1mindex ae811ff..bb26d07 100644[m
+[1m--- a/CyberLens-extension/components/nonTechMode.html[m
+[1m+++ b/CyberLens-extension/components/nonTechMode.html[m
+[36m@@ -1,5 +1,22 @@[m
+ <h3>💸 NON-TECH MODE</h3>[m
+ [m
+[32m+[m[32m<!-- PRICE SEARCH -->[m
+[32m+[m[32m<div class="card">[m
+[32m+[m[32m  <h4>🔎 Compare Prices</h4>[m
+[32m+[m[32m  <input[m
+[32m+[m[32m    id="nlQueryInput"[m
+[32m+[m[32m    type="text"[m
+[32m+[m[32m    placeholder='e.g. "Apple iPhone 16 Plus 256 GB"'[m
+[32m+[m[32m    style="width:100%;box-sizing:border-box;padding:8px;border-radius:8px;border:1px solid #2a3b55;background:#0b1220;color:#e6f1ff;font-size:12px;"[m
+[32m+[m[32m  />[m
+[32m+[m[32m  <button[m
+[32m+[m[32m    id="nlSearchBtn"[m
+[32m+[m[32m    style="margin-top:8px;width:100%;padding:8px;border-radius:8px;border:1px solid #00ff88;background:rgba(0,255,136,0.12);color:#00ff88;font-weight:600;cursor:pointer;"[m
+[32m+[m[32m  >[m
+[32m+[m[32m    Compare Prices[m
+[32m+[m[32m  </button>[m
+[32m+[m[32m</div>[m
+[32m+[m
+ <!-- PRODUCT DETECTION -->[m
+ <div class="card">[m
+   <h4>📦 Product Detection</h4>[m
+[1mdiff --git a/CyberLens-extension/popup.js b/CyberLens-extension/popup.js[m
+[1mindex d3a787a..f07fae4 100644[m
+[1m--- a/CyberLens-extension/popup.js[m
+[1m+++ b/CyberLens-extension/popup.js[m
+[36m@@ -90,27 +90,32 @@[m [masync function initNonTechMode(){[m
+   if(!productStatus || !offers || !bestDeal) return;[m
+ [m
+   productStatus.innerHTML = "🔎 Detecting product...";[m
+[31m-  offers.innerHTML = "Waiting for price data...";[m
+[32m+[m[32m  offers.innerHTML = "Waiting for product detection...";[m
+   bestDeal.innerHTML = "No comparison yet.";[m
+ [m
+[32m+[m[32m  const nlInput = document.getElementById("nlQueryInput");[m
+[32m+[m[32m  const nlBtn = document.getElementById("nlSearchBtn");[m
+[32m+[m
+[32m+[m[32m  let detectedProduct = null;[m
+[32m+[m
+   try{[m
+ [m
+[31m-    const product = await detectProduct();[m
+[32m+[m[32m    detectedProduct = await detectProduct();[m
+ [m
+[31m-    if(!product){[m
+[31m-      productStatus.innerHTML = "❌ Product not detected.";[m
+[32m+[m[32m    if(!detectedProduct){[m
+[32m+[m[32m      productStatus.innerHTML = "❌ Product not detected. You can type it manually below.";[m
+[32m+[m[32m      if(nlInput) offers.innerHTML = "Type the product name above, then press <b>Compare Prices</b>.";[m
+     }else{[m
+ [m
+[31m-      productStatus.innerHTML = `<b>📦 Product Detected:</b><br>${product}`;[m
+[31m-      offers.innerHTML = "💰 Comparing prices...";[m
+[31m-[m
+[31m-      const response = await fetch([m
+[31m-        `http://localhost:3000/compare?product=${encodeURIComponent(product)}`[m
+[31m-      );[m
+[32m+[m[32m      productStatus.innerHTML = `<b>📦 Product Detected:</b><br>${escapeHtml(detectedProduct)}`;[m
+ [m
+[31m-      const data = await response.json();[m
+[32m+[m[32m      if(nlInput && !nlInput.value.trim()){[m
+[32m+[m[32m        nlInput.value = detectedProduct;[m
+[32m+[m[32m      }[m
+ [m
+[31m-      displayComparison(data);[m
+[32m+[m[32m      if(nlInput){[m
+[32m+[m[32m        offers.innerHTML = "Press <b>Compare Prices</b> to find the lowest valid price.";[m
+[32m+[m[32m      }[m
+ [m
+     }[m
+ [m
+[36m@@ -119,11 +124,43 @@[m [masync function initNonTechMode(){[m
+     console.error(error);[m
+ [m
+     productStatus.innerHTML = "❌ Detection failed.";[m
+[31m-    offers.innerHTML = "Error loading prices.";[m
+[32m+[m[32m    offers.innerHTML = "You can still type the product manually.";[m
+ [m
+   }[m
+ [m
+[32m+[m[32m  if(nlInput && nlBtn){[m
+ [m
+[32m+[m[32m    const runNlSearch = () => {[m
+[32m+[m[32m      const query = nlInput.value.trim();[m
+[32m+[m[32m      if(query){[m
+[32m+[m[32m        searchNonTech(query);[m
+[32m+[m[32m      }[m
+[32m+[m[32m    };[m
+[32m+[m
+[32m+[m[32m    nlBtn.addEventListener("click", runNlSearch);[m
+[32m+[m
+[32m+[m[32m    nlInput.addEventListener("keydown", (e) => {[m
+[32m+[m[32m      if(e.key === "Enter") runNlSearch();[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m  } else {[m
+[32m+[m
+[32m+[m[32m    /* Legacy fallback path (old HTML without the search card) */[m
+[32m+[m[32m    if(detectedProduct){[m
+[32m+[m
+[32m+[m[32m      offers.innerHTML = "💰 Comparing prices...";[m
+[32m+[m
+[32m+[m[32m      const response = await fetch([m
+[32m+[m[32m        `http://localhost:3000/compare?product=${encodeURIComponent(detectedProduct)}`[m
+[32m+[m[32m      );[m
+[32m+[m
+[32m+[m[32m      const data = await response.json();[m
+[32m+[m
+[32m+[m[32m      displayComparison(data);[m
+[32m+[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m  }[m
+ [m
+ }[m
+ [m
+[36m@@ -158,13 +195,85 @@[m [masync function detectProduct(){[m
+ [m
+ function extractProductName(){[m
+ [m
+[31m-  const ogTitle = document.querySelector("meta[property='og:title']");[m
+[31m-  if(ogTitle) return ogTitle.content;[m
+[32m+[m[32m  /* TITLE-RULES-START */[m
+[32m+[m[32m  function normalizeTitle(value){[m
+[32m+[m[32m    return String(value || "").replace(/\s+/g, " ").trim();[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function isValidProductTitle(value){[m
+[32m+[m
+[32m+[m[32m    var s = normalizeTitle(value);[m
+[32m+[m
+[32m+[m[32m    if(!s || s.length < 6 || s.length > 300) return false;[m
+[32m+[m
+[32m+[m[32m    var GENERIC = [[m
+[32m+[m[32m      /product summary/i,[m
+[32m+[m[32m      /key product information/i,[m
+[32m+[m[32m      /^product information$/i,[m
+[32m+[m[32m      /^add to cart$/i,[m
+[32m+[m[32m      /^buy now$/i,[m
+[32m+[m[32m      /^sign in$/i,[m
+[32m+[m[32m      /frequently bought/i,[m
+[32m+[m[32m      /customers? also/i,[m
+[32m+[m[32m      /^sponsored/i,[m
+[32m+[m[32m      /^(results?|deals?|best sellers?)$/i,[m
+[32m+[m[32m      /keep shopping/i,[m
+[32m+[m[32m      /your recently viewed/i,[m
+[32m+[m[32m      /^(home|today's deals|shop by category)$/i[m
+[32m+[m[32m    ];[m
+[32m+[m
+[32m+[m[32m    for(var i = 0; i < GENERIC.length; i++){[m
+[32m+[m[32m      if(GENERIC[i].test(s)) return false;[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    if(!/[a-z]/i.test(s)) return false;[m
+ [m
+[31m-  const h1 = document.querySelector("h1");[m
+[31m-  if(h1) return h1.innerText;[m
+[32m+[m[32m    var stripped = s[m
+[32m+[m[32m      .replace(/(₹|rs\.?|inr|\$|€|£)\s?[\d,.]+/gi, " ")[m
+[32m+[m[32m      .replace(/[\d\s.,%xX×\-–—]/g, "");[m
+ [m
+[31m-  return document.title;[m
+[32m+[m[32m    if(stripped.replace(/\s/g, "").length < 4) return false;[m
+[32m+[m
+[32m+[m[32m    var FILLER = {[m
+[32m+[m[32m      the:true, and:true, for:true, with:true, new:true, best:true,[m
+[32m+[m[32m      only:true, all:true, you:true, your:true, this:true, that:true,[m
+[32m+[m[32m      from:true, into:true, per:true, via:true[m
+[32m+[m[32m    };[m
+[32m+[m
+[32m+[m[32m    var words = stripped.toLowerCase().match(/[a-z]+/g) || [];[m
+[32m+[m
+[32m+[m[32m    return words.some(function(w){[m
+[32m+[m[32m      return w.length >= 3 && !FILLER[w];[m
+[32m+[m[32m    });[m
+[32m+[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  function detectProductTitle(doc){[m
+[32m+[m
+[32m+[m[32m    if(!doc || !doc.querySelector) return null;[m
+[32m+[m
+[32m+[m[32m    var el = doc.querySelector("#productTitle");[m
+[32m+[m[32m    if(el && isValidProductTitle(el.textContent)) return normalizeTitle(el.textContent);[m
+[32m+[m
+[32m+[m[32m    var meta = doc.querySelector("meta[property='og:title']");[m
+[32m+[m[32m    if(meta && isValidProductTitle(meta.content)) return normalizeTitle(meta.content);[m
+[32m+[m
+[32m+[m[32m    var h1 = doc.querySelector("h1");[m
+[32m+[m[32m    var h1Text = h1 && ([m
+[32m+[m[32m      (h1.innerText && String(h1.innerText)) ||[m
+[32m+[m[32m      (h1.textContent && St

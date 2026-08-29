@@ -90,27 +90,32 @@ async function initNonTechMode(){
   if(!productStatus || !offers || !bestDeal) return;
 
   productStatus.innerHTML = "🔎 Detecting product...";
-  offers.innerHTML = "Waiting for price data...";
+  offers.innerHTML = "Waiting for product detection...";
   bestDeal.innerHTML = "No comparison yet.";
+
+  const nlInput = document.getElementById("nlQueryInput");
+  const nlBtn = document.getElementById("nlSearchBtn");
+
+  let detectedProduct = null;
 
   try{
 
-    const product = await detectProduct();
+    detectedProduct = await detectProduct();
 
-    if(!product){
-      productStatus.innerHTML = "❌ Product not detected.";
+    if(!detectedProduct){
+      productStatus.innerHTML = "❌ Product not detected. You can type it manually below.";
+      if(nlInput) offers.innerHTML = "Type the product name above, then press <b>Compare Prices</b>.";
     }else{
 
-      productStatus.innerHTML = `<b>📦 Product Detected:</b><br>${product}`;
-      offers.innerHTML = "💰 Comparing prices...";
+      productStatus.innerHTML = `<b>📦 Product Detected:</b><br>${escapeHtml(detectedProduct)}`;
 
-      const response = await fetch(
-        `http://localhost:3000/compare?product=${encodeURIComponent(product)}`
-      );
+      if(nlInput && !nlInput.value.trim()){
+        nlInput.value = detectedProduct;
+      }
 
-      const data = await response.json();
-
-      displayComparison(data);
+      if(nlInput){
+        offers.innerHTML = "Press <b>Compare Prices</b> to find the lowest valid price.";
+      }
 
     }
 
@@ -119,11 +124,43 @@ async function initNonTechMode(){
     console.error(error);
 
     productStatus.innerHTML = "❌ Detection failed.";
-    offers.innerHTML = "Error loading prices.";
+    offers.innerHTML = "You can still type the product manually.";
 
   }
 
+  if(nlInput && nlBtn){
 
+    const runNlSearch = () => {
+      const query = nlInput.value.trim();
+      if(query){
+        searchNonTech(query);
+      }
+    };
+
+    nlBtn.addEventListener("click", runNlSearch);
+
+    nlInput.addEventListener("keydown", (e) => {
+      if(e.key === "Enter") runNlSearch();
+    });
+
+  } else {
+
+    /* Legacy fallback path (old HTML without the search card) */
+    if(detectedProduct){
+
+      offers.innerHTML = "💰 Comparing prices...";
+
+      const response = await fetch(
+        `http://localhost:3000/compare?product=${encodeURIComponent(detectedProduct)}`
+      );
+
+      const data = await response.json();
+
+      displayComparison(data);
+
+    }
+
+  }
 
 }
 
@@ -158,13 +195,85 @@ async function detectProduct(){
 
 function extractProductName(){
 
-  const ogTitle = document.querySelector("meta[property='og:title']");
-  if(ogTitle) return ogTitle.content;
+  /* TITLE-RULES-START */
+  function normalizeTitle(value){
+    return String(value || "").replace(/\s+/g, " ").trim();
+  }
 
-  const h1 = document.querySelector("h1");
-  if(h1) return h1.innerText;
+  function isValidProductTitle(value){
 
-  return document.title;
+    var s = normalizeTitle(value);
+
+    if(!s || s.length < 6 || s.length > 300) return false;
+
+    var GENERIC = [
+      /product summary/i,
+      /key product information/i,
+      /^product information$/i,
+      /^add to cart$/i,
+      /^buy now$/i,
+      /^sign in$/i,
+      /frequently bought/i,
+      /customers? also/i,
+      /^sponsored/i,
+      /^(results?|deals?|best sellers?)$/i,
+      /keep shopping/i,
+      /your recently viewed/i,
+      /^(home|today's deals|shop by category)$/i
+    ];
+
+    for(var i = 0; i < GENERIC.length; i++){
+      if(GENERIC[i].test(s)) return false;
+    }
+
+    if(!/[a-z]/i.test(s)) return false;
+
+    var stripped = s
+      .replace(/(₹|rs\.?|inr|\$|€|£)\s?[\d,.]+/gi, " ")
+      .replace(/[\d\s.,%xX×\-–—]/g, "");
+
+    if(stripped.replace(/\s/g, "").length < 4) return false;
+
+    var FILLER = {
+      the:true, and:true, for:true, with:true, new:true, best:true,
+      only:true, all:true, you:true, your:true, this:true, that:true,
+      from:true, into:true, per:true, via:true
+    };
+
+    var words = stripped.toLowerCase().match(/[a-z]+/g) || [];
+
+    return words.some(function(w){
+      return w.length >= 3 && !FILLER[w];
+    });
+
+  }
+
+  function detectProductTitle(doc){
+
+    if(!doc || !doc.querySelector) return null;
+
+    var el = doc.querySelector("#productTitle");
+    if(el && isValidProductTitle(el.textContent)) return normalizeTitle(el.textContent);
+
+    var meta = doc.querySelector("meta[property='og:title']");
+    if(meta && isValidProductTitle(meta.content)) return normalizeTitle(meta.content);
+
+    var h1 = doc.querySelector("h1");
+    var h1Text = h1 && (
+      (h1.innerText && String(h1.innerText)) ||
+      (h1.textContent && String(h1.textContent)) ||
+      ""
+    );
+    if(h1Text && isValidProductTitle(h1Text)) return normalizeTitle(h1Text);
+
+    if(isValidProductTitle(doc.title)) return normalizeTitle(doc.title);
+
+    return null;
+
+  }
+  /* TITLE-RULES-END */
+
+  return detectProductTitle(document);
 
 }
 
@@ -205,6 +314,218 @@ function displayComparison(data){
   💰 ₹${data.best.price}
   </div>
   `;
+
+}
+
+
+/* ===================== SERP PRICE COMPARISON ===================== */
+
+const CURRENCY_SYMBOLS = {
+  INR: "₹",
+  USD: "$",
+  EUR: "€",
+  GBP: "£"
+};
+
+let lastNonTechQuery = "";
+
+function escapeHtml(text){
+  return String(text ?? "").replace(/[&<>"']/g, (c) => ({
+    "&":"&amp;",
+    "<":"&lt;",
+    ">":"&gt;",
+    '"':"&quot;",
+    "'":"&#39;"
+  })[c]);
+}
+
+function openOfferUrl(url){
+  try{
+    chrome.tabs.create({ url });
+  }catch(e){
+    window.open(url, "_blank");
+  }
+}
+
+function formatPrice(price, currency){
+  const symbol = CURRENCY_SYMBOLS[currency] || "";
+  const formatted = Number(price).toLocaleString("en-IN");
+  return `${symbol}${formatted} ${currency === "INR" ? "" : currency}`.trim();
+}
+
+async function searchNonTech(query){
+
+  const productStatus = document.getElementById("productStatus");
+  const offers = document.getElementById("offers");
+  const bestDeal = document.getElementById("bestDeal");
+
+  if(!productStatus || !offers || !bestDeal) return;
+
+  lastNonTechQuery = query;
+
+  productStatus.innerHTML = `🔎 Searching for:<br><b>${escapeHtml(query)}</b>`;
+  offers.innerHTML = "💰 Comparing prices across stores...";
+  bestDeal.innerHTML = "Finding the lowest valid price...";
+
+  try{
+
+    const response = await fetch(
+      `http://localhost:3000/nontech-compare?q=${encodeURIComponent(query)}`
+    );
+
+    const data = await response.json();
+
+    if(!response.ok || data.success === false){
+      showNonTechError(data.error || "Something went wrong while comparing prices.");
+      return;
+    }
+
+    renderNonTechResults(data);
+
+  }catch(error){
+
+    console.error("Non-Tech search failed:", error);
+    showNonTechError(
+      "Could not reach the CyberLens backend. Is it running on http://localhost:3000?"
+    );
+
+  }
+
+}
+
+function renderNonTechResults(data){
+
+  const productStatus = document.getElementById("productStatus");
+  const offers = document.getElementById("offers");
+  const bestDeal = document.getElementById("bestDeal");
+
+  const dp = data.detectedProduct || {};
+  const nameParts = [dp.brand, dp.name].filter(Boolean).join(" ");
+
+  const variantParts = [];
+  if(dp.variant){
+    if(dp.variant.storage) variantParts.push(dp.variant.storage);
+    if(dp.variant.ram) variantParts.push(`${dp.variant.ram} RAM`);
+    if(dp.variant.color) variantParts.push(dp.variant.color);
+    if(dp.variant.size) variantParts.push(dp.variant.size);
+  }
+
+  if(nameParts){
+    productStatus.innerHTML =
+      `<b>📦 Product:</b><br>` +
+      escapeHtml([nameParts, variantParts.join(", ")].filter(Boolean).join(" – "));
+  }
+
+  const bp = data.bestPrice;
+
+  const offerImage = bp.image ||
+    (data.offers || []).map((o) => o.image).find(Boolean) ||
+    null;
+
+  bestDeal.innerHTML = `
+  <div style="
+  padding:10px;
+  background:rgba(0,255,136,0.14);
+  border:1px solid #00ff88;
+  border-radius:8px;
+  font-weight:700;
+  ">
+  🏆 BEST DEAL<br>
+  ${escapeHtml(bp.store)}<br>
+  💰 ${escapeHtml(formatPrice(bp.price, bp.currency))}<br>
+  <a href="#" id="bestPriceLink" style="color:#00ff88;font-size:11px;">View product →</a>
+  </div>
+  <div style="font-size:10px;color:#8aa0b4;margin-top:6px;">
+  Lowest of ${data.offers.length} valid offer(s)
+  ${data.meta && data.meta.exactMatches === 0 ? " · variant-matched only" : ""}
+  </div>
+  `;
+
+  const bestCard = bestDeal.querySelector("div");
+
+  if(bestCard && offerImage){
+
+    const img = document.createElement("img");
+
+    img.src = offerImage;
+    img.alt = "";
+    img.referrerPolicy = "no-referrer";
+    img.style.cssText =
+      "width:100%;max-height:110px;object-fit:contain;background:#ffffff;" +
+      "border-radius:6px;padding:4px;margin-top:8px;box-sizing:border-box;";
+
+    bestCard.appendChild(img);
+
+  }
+
+  const bestLink = document.getElementById("bestPriceLink");
+  if(bestLink){
+    bestLink.onclick = (e) => {
+      e.preventDefault();
+      openOfferUrl(bp.url);
+    };
+  }
+
+  let priceList = "";
+
+  data.offers.forEach((offer, index) => {
+
+    const isBest = index === 0;
+
+    priceList += `
+    <p style="margin:6px 0;${isBest ? "font-weight:600;color:#00ff88;" : ""}">
+    ${index + 1}. <b>${escapeHtml(offer.store)}</b> –
+    ${escapeHtml(formatPrice(offer.price, offer.currency))}
+    ${offer.matchType === "variant-mismatch"
+      ? `<span style="color:#ffb84d;font-size:9px;">(variant mismatch)</span>`
+      : ""}
+    <br>
+    <a href="#" class="offer-link" data-url="${escapeHtml(offer.url)}"
+       style="color:#7fd4ff;font-size:10px;word-break:break-all;">
+       ${escapeHtml(offer.title.length > 60 ? offer.title.slice(0, 60) + "…" : offer.title)}
+    </a>
+    </p>`;
+
+  });
+
+  offers.innerHTML = priceList || "No offers found.";
+
+  offers.querySelectorAll(".offer-link").forEach((link) => {
+    link.onclick = (e) => {
+      e.preventDefault();
+      openOfferUrl(link.dataset.url);
+    };
+  });
+
+}
+
+function showNonTechError(message){
+
+  const offers = document.getElementById("offers");
+  const bestDeal = document.getElementById("bestDeal");
+
+  if(offers){
+
+    offers.innerHTML = `❌ ${escapeHtml(message)}`;
+
+    if(lastNonTechQuery){
+
+      const retryBtn = document.createElement("button");
+
+      retryBtn.textContent = "🔄 Retry";
+      retryBtn.style.cssText =
+        "margin-top:8px;padding:6px 14px;border-radius:8px;" +
+        "border:1px solid #00ff88;background:rgba(0,255,136,0.12);" +
+        "color:#00ff88;font-weight:600;cursor:pointer;";
+      retryBtn.addEventListener("click", () => searchNonTech(lastNonTechQuery));
+
+      offers.appendChild(retryBtn);
+
+    }
+
+  }
+
+  if(bestDeal) bestDeal.innerHTML = "No comparison available.";
 
 }
 
