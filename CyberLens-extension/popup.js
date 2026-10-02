@@ -178,9 +178,25 @@ async function detectProduct(){
 
   const url = tab.url;
 
-  if(!(url.includes("amazon") || url.includes("flipkart") || url.includes("myntra")))
-  return null;
+  // Try new universal extraction via message passing
+  try {
+    const result = await chrome.tabs.sendMessage(tab.id, { type: "EXTRACT_PRODUCT" });
+    
+    if (result && result.success && result.product) {
+      console.log("[UNIVERSAL_DETECTION] Successfully extracted normalized product:", result.product);
+      
+      // Store the full normalized product for later use
+      window.lastNormalizedProduct = result.product;
+      window.lastExtractionLog = result.extractionLog;
+      
+      // Return clean title for backward compatibility
+      return result.product.cleanTitle || result.product.rawTitle;
+    }
+  } catch (error) {
+    console.log("[UNIVERSAL_DETECTION] Message passing failed, falling back to script injection:", error);
+  }
 
+  // Fallback to script injection for backward compatibility
   const results = await chrome.scripting.executeScript({
     target:{tabId:tab.id},
     func:extractProductName
@@ -195,6 +211,26 @@ async function detectProduct(){
 
 function extractProductName(){
 
+  // Use the new universal extraction system
+  if (typeof extractProductUniversal === 'function') {
+    const rawProduct = extractProductUniversal();
+    if (rawProduct && rawProduct.productName) {
+      console.log("[UNIVERSAL_EXTRACT] Successfully extracted:", rawProduct);
+      
+      // Normalize the product if normalizer is available
+      if (typeof normalizeProduct === 'function') {
+        const normalized = normalizeProduct(rawProduct);
+        console.log("[UNIVERSAL_EXTRACT] Normalized product:", normalized);
+        
+        // Return the clean title for backward compatibility
+        return normalized.cleanTitle || rawProduct.productName;
+      }
+      
+      return rawProduct.productName;
+    }
+  }
+  
+  // Fallback to legacy extraction if universal system not available
   /* TITLE-RULES-START */
   function normalizeTitle(value){
     return String(value || "").replace(/\s+/g, " ").trim();
@@ -363,17 +399,36 @@ async function searchNonTech(query){
 
   lastNonTechQuery = query;
 
+  console.log(`[POPUP_REQUEST] rawProduct: "${query}"`);
+  
   productStatus.innerHTML = `🔎 Searching for:<br><b>${escapeHtml(query)}</b>`;
   offers.innerHTML = "💰 Comparing prices across stores...";
   bestDeal.innerHTML = "Finding the lowest valid price...";
 
   try{
+    let apiUrl;
+    
+    // Use normalized product if available from detection
+    if (window.lastNormalizedProduct) {
+      console.log(`[POPUP_REQUEST] Using normalized product structure`);
+      const normalizedProductParam = encodeURIComponent(JSON.stringify(window.lastNormalizedProduct));
+      const extractionLogParam = window.lastExtractionLog ? encodeURIComponent(JSON.stringify(window.lastExtractionLog)) : '';
+      apiUrl = `http://localhost:3000/nontech-compare?normalizedProduct=${normalizedProductParam}&extractionLog=${extractionLogParam}`;
+      console.log(`[POPUP_REQUEST] requestQuery: "${apiUrl}"`);
+    } else {
+      // Backward compatibility: use simple query
+      console.log(`[POPUP_REQUEST] Using simple query (backward compatibility)`);
+      apiUrl = `http://localhost:3000/nontech-compare?q=${encodeURIComponent(query)}`;
+      console.log(`[POPUP_REQUEST] requestQuery: "?q=${encodeURIComponent(query)}"`);
+    }
 
-    const response = await fetch(
-      `http://localhost:3000/nontech-compare?q=${encodeURIComponent(query)}`
-    );
-
+    const response = await fetch(apiUrl);
     const data = await response.json();
+
+    console.log(`[POPUP_RECEIVED] success=${data.success}, offers count=${data.offers ? data.offers.length : 0}`);
+    console.log(`[POPUP_RECEIVED] exactMatchFound=${data.exactMatchFound}`);
+    console.log(`[POPUP_RECEIVED] bestPrice: ${data.bestPrice ? JSON.stringify(data.bestPrice) : 'null'}`);
+    console.log(`[POPUP_RECEIVED] detectedProduct: ${data.detectedProduct ? JSON.stringify(data.detectedProduct) : 'null'}`);
 
     if(!response.ok || data.success === false){
       showNonTechError(data.error || "Something went wrong while comparing prices.");
@@ -400,7 +455,8 @@ function renderNonTechResults(data){
   const bestDeal = document.getElementById("bestDeal");
 
   const dp = data.detectedProduct || {};
-  const nameParts = [dp.brand, dp.name].filter(Boolean).join(" ");
+  // Use cleanTitle or simpleName if available, otherwise fall back to brand + name
+  const displayName = dp.cleanTitle || dp.simpleName || [dp.brand, dp.name].filter(Boolean).join(" ");
 
   const variantParts = [];
   if(dp.variant){
@@ -409,11 +465,18 @@ function renderNonTechResults(data){
     if(dp.variant.color) variantParts.push(dp.variant.color);
     if(dp.variant.size) variantParts.push(dp.variant.size);
   }
+  // Also check specifications object for newer format
+  if(dp.specifications){
+    if(dp.specifications.storage) variantParts.push(dp.specifications.storage);
+    if(dp.specifications.ram) variantParts.push(dp.specifications.ram);
+    if(dp.specifications.size) variantParts.push(dp.specifications.size);
+    if(dp.specifications.color) variantParts.push(dp.specifications.color);
+  }
 
-  if(nameParts){
+  if(displayName){
     productStatus.innerHTML =
       `<b>📦 Product:</b><br>` +
-      escapeHtml([nameParts, variantParts.join(", ")].filter(Boolean).join(" – "));
+      escapeHtml([displayName, variantParts.join(", ")].filter(Boolean).join(" – "));
   }
 
   const bp = data.bestPrice;
@@ -421,6 +484,13 @@ function renderNonTechResults(data){
   const offerImage = bp.image ||
     (data.offers || []).map((o) => o.image).find(Boolean) ||
     null;
+
+  // Show exact match status in UI
+  const exactMatchStatus = data.exactMatchFound === false ? 
+    " · <span style=\"color:#ffb84d\">Exact match not found</span>" : "";
+  
+  const matchNote = data.note ? 
+    `<div style="font-size:9px;color:#ffb84d;margin-top:4px;">${escapeHtml(data.note)}</div>` : "";
 
   bestDeal.innerHTML = `
   <div style="
@@ -437,8 +507,9 @@ function renderNonTechResults(data){
   </div>
   <div style="font-size:10px;color:#8aa0b4;margin-top:6px;">
   Lowest of ${data.offers.length} valid offer(s)
-  ${data.meta && data.meta.exactMatches === 0 ? " · variant-matched only" : ""}
+  ${exactMatchStatus}
   </div>
+  ${matchNote}
   `;
 
   const bestCard = bestDeal.querySelector("div");
@@ -471,14 +542,24 @@ function renderNonTechResults(data){
   data.offers.forEach((offer, index) => {
 
     const isBest = index === 0;
+    
+    // Show match type badge for new generic matcher
+    let matchBadge = "";
+    if (offer.matchType === "EXACT_MATCH") {
+      matchBadge = `<span style="color:#00ff88;font-size:9px;">(Exact)</span>`;
+    } else if (offer.matchType === "FAMILY_MATCH") {
+      matchBadge = `<span style="color:#7fd4ff;font-size:9px;">(Family)</span>`;
+    } else if (offer.matchType === "RELATED_VARIANT") {
+      matchBadge = `<span style="color:#ffb84d;font-size:9px;">(Variant)</span>`;
+    } else if (offer.matchType === "variant-mismatch") {
+      matchBadge = `<span style="color:#ffb84d;font-size:9px;">(variant mismatch)</span>`;
+    }
 
     priceList += `
     <p style="margin:6px 0;${isBest ? "font-weight:600;color:#00ff88;" : ""}">
     ${index + 1}. <b>${escapeHtml(offer.store)}</b> –
     ${escapeHtml(formatPrice(offer.price, offer.currency))}
-    ${offer.matchType === "variant-mismatch"
-      ? `<span style="color:#ffb84d;font-size:9px;">(variant mismatch)</span>`
-      : ""}
+    ${matchBadge}
     <br>
     <a href="#" class="offer-link" data-url="${escapeHtml(offer.url)}"
        style="color:#7fd4ff;font-size:10px;word-break:break-all;">
@@ -489,6 +570,7 @@ function renderNonTechResults(data){
   });
 
   offers.innerHTML = priceList || "No offers found.";
+  console.log(`[POPUP_RENDERED] count=${data.offers ? data.offers.length : 0} offers rendered`);
 
   offers.querySelectorAll(".offer-link").forEach((link) => {
     link.onclick = (e) => {

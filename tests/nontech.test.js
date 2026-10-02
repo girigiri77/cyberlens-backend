@@ -4,7 +4,10 @@ const {
   classifyOffer,
   extractSerpOffers,
   dedupeOffers,
-  runNonTechCompare
+  runNonTechCompare,
+  buildSmartSearchQueries,
+  classifyOfferGeneric,
+  detectProductCategory
 } = require("../server");
 
 let passed = 0;

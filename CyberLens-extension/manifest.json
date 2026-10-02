@@ -12,5 +12,15 @@
   ],
   "host_permissions": [
     "<all_urls>"
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "extractors/universal.js",
+        "extractors/normalizer.js",
+        "extractors/platform-specific.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
   ]
 }
